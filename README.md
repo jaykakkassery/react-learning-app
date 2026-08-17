@@ -1,7 +1,7 @@
 # React Learning App — A Tutorial from Zero
 
 This project is a hands-on tutorial for learning React and its ecosystem.
-It is modeled after a real production React app (`ui-hotelhybrid`) and built
+It is modeled after a real production React app  and built
 up one step at a time. If you know a little JavaScript, this guide will walk
 you through everything you need to understand how modern React development works.
 
