@@ -45,7 +45,17 @@ you through everything you need to understand how modern React development works
     - [The complete flow, step by step](#152-the-complete-flow-step-by-step)
     - [What React does at each stage](#153-what-react-does-at-each-stage)
     - [Reading the Results page code](#154-reading-the-results-page-code)
-16. [What We Will Build Next](#16-what-we-will-build-next)
+16. [How the Landing Page Loads — End to End](#16-how-the-landing-page-loads--end-to-end)
+    - [Step 1 — npm run dev](#step-1--you-type-npm-run-dev)
+    - [Step 2 — Vite starts up](#step-2--vite-starts-up)
+    - [Step 3 — Browser requests the page](#step-3--you-open-httplocalhost5173-in-the-browser)
+    - [Step 4 — Browser requests main.tsx](#step-4--browser-requests-maintsx)
+    - [Step 5 — The import chain fans out](#step-5--the-import-chain-fans-out)
+    - [Step 6 — main.tsx code runs](#step-6--maintsx-code-runs)
+    - [Step 7 — React renders App](#step-7--react-renders-app)
+    - [Step 8 — React renders LandingPage](#step-8--react-renders-landingpage)
+    - [Step 9 — Browser paints the screen](#step-9--browser-paints-the-screen)
+17. [What We Will Build Next](#17-what-we-will-build-next)
 
 ---
 
@@ -2038,7 +2048,340 @@ Never use the array index as a key (it breaks when the list is reordered).
 
 ---
 
-## 16. What We Will Build Next
+## 16. How the Landing Page Loads — End to End
+
+This section traces every single thing that happens from the moment you type
+`npm run dev` in the terminal to the moment "Hotel Finder.." appears on screen.
+
+---
+
+### Step 1 — You type `npm run dev`
+
+```bash
+npm run dev
+```
+
+`npm` opens `package.json` and reads the `scripts` section:
+
+```json
+"scripts": {
+  "dev": "vite",
+  ...
+}
+```
+
+`npm run dev` is just a shortcut — it actually runs the command `vite`. npm
+finds the `vite` executable inside `node_modules/.bin/vite` and runs it. This
+starts a new **process** (a running program) on your machine.
+
+---
+
+### Step 2 — Vite starts up
+
+Vite reads `vite.config.ts`:
+
+```typescript
+export default defineConfig({
+  plugins: [react()],   // adds React/JSX support and HMR
+  server: {
+    proxy: { '/api': 'http://localhost:3001' }
+  },
+});
+```
+
+Then Vite does three things:
+1. Starts an **HTTP server** listening on port `5173`
+2. Sets up a **file watcher** — it monitors every `.tsx/.ts/.css` file for changes
+3. Opens a **WebSocket channel** — used later for hot reloading
+
+Your terminal prints:
+```
+  VITE v8.x  ready in 312 ms
+  ➜  Local: http://localhost:5173/
+```
+
+Vite is now waiting. No files have been compiled yet — Vite is lazy and only
+processes a file when the browser actually asks for it.
+
+---
+
+### Step 3 — You open `http://localhost:5173` in the browser
+
+The browser sends this HTTP request to Vite:
+
+```
+GET / HTTP/1.1
+Host: localhost:5173
+```
+
+Vite receives it, sees the path is `/`, and responds with the contents of
+`index.html`:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>react-learning-app</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+The browser paints a **blank white page** at this point. The `<div id="root">`
+is empty. But the browser then sees the `<script>` tag and knows it has more
+work to do.
+
+---
+
+### Step 4 — Browser requests `main.tsx`
+
+The browser sends another request:
+
+```
+GET /src/main.tsx
+```
+
+Vite opens `src/main.tsx`, runs **esbuild** on it — stripping TypeScript types
+and converting JSX to plain JavaScript — and sends the result back.
+
+The browser starts reading `main.tsx` and hits its `import` lines:
+
+```tsx
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import '@mantine/core/styles.css';
+import { App } from './app/app';
+```
+
+Every `import` line causes the browser to **pause and send another request**
+to Vite:
+
+```
+GET /node_modules/react/...         ← the React library
+GET /node_modules/react-dom/...     ← the ReactDOM library
+GET /@mantine/core/styles.css       ← Mantine's stylesheet (applied globally)
+GET /src/app/app.tsx                ← your App component
+```
+
+---
+
+### Step 5 — The import chain fans out
+
+When Vite serves `app.tsx`, the browser reads its imports:
+
+```tsx
+import { BrowserRouter, Route, Switch } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { MantineProvider } from '@mantine/core';
+import { queryClient } from './query-client';
+import { LandingPage } from './landing';
+import { ResultsPage } from './results';
+```
+
+Each one triggers more requests:
+
+```
+GET /src/app/query-client.ts
+GET /src/app/landing/index.tsx
+GET /src/app/results/index.tsx
+GET /node_modules/react-router-dom/...
+GET /node_modules/@tanstack/react-query/...
+GET /node_modules/@mantine/core/...
+```
+
+This is the **native ES module** system at work — the browser resolves imports
+like a chain, requesting each file as it discovers it. Vite converts each
+TypeScript/JSX file on the fly and sends it back.
+
+Once every import is resolved and every file has arrived, the browser has
+everything it needs to actually execute the code.
+
+---
+
+### Step 6 — `main.tsx` code runs
+
+Now the browser executes `src/main.tsx`:
+
+```tsx
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+```
+
+Line by line:
+
+- `document.getElementById('root')` — finds the `<div id="root">` in the HTML.
+  It is still empty at this point.
+- `createRoot(...)` — React takes ownership of that div. From here on, React
+  controls everything inside it.
+- `.render(<StrictMode><App /></StrictMode>)` — React is told to render the
+  `<App />` component inside that div.
+
+React now calls the `App` function.
+
+---
+
+### Step 7 — React renders `App`
+
+`src/app/app.tsx`:
+
+```tsx
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MantineProvider>
+        <BrowserRouter>
+          <Switch>
+            <Route exact path="/">
+              <LandingPage />
+            </Route>
+            <Route path="/results">
+              <ResultsPage />
+            </Route>
+          </Switch>
+        </BrowserRouter>
+      </MantineProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+React processes this JSX from the **outside in**, setting up each Provider:
+
+1. **`QueryClientProvider`** — creates a React Context and puts the `queryClient`
+   object into it. Any component inside can now call `useQuery()`.
+
+2. **`MantineProvider`** — creates a theme Context. All Mantine components inside
+   read from it for colours, fonts, and spacing.
+
+3. **`BrowserRouter`** — reads `window.location.pathname`. The current URL is `/`.
+   It creates a routing Context and broadcasts the current location to everything
+   inside.
+
+4. **`Switch`** — examines its `<Route>` children one by one:
+   - `<Route exact path="/">` — does `/` match `/`? **Yes.** Stop here, render this.
+   - `<Route path="/results">` — never even checked. `Switch` stops at the first match.
+
+5. React renders `<LandingPage />`.
+
+---
+
+### Step 8 — React renders `LandingPage`
+
+`src/app/landing/index.tsx`:
+
+```tsx
+export function LandingPage() {
+  const history = useHistory();
+
+  return (
+    <Container size="md" py="xl">
+      <Stack align="center" gap="md">
+        <Title>Hotel Finder..</Title>
+        <Text c="dimmed">Learning React the ui-hotelhybrid way</Text>
+        <Button size="lg" mt="md" onClick={() => history.push('/results')}>
+          Browse Hotels
+        </Button>
+      </Stack>
+    </Container>
+  );
+}
+```
+
+- **`useHistory()`** — reads from the BrowserRouter Context that was set up in
+  Step 7. Returns a `history` object you can use to change the URL. No network
+  request — just reading from an in-memory Context.
+
+- The JSX returns Mantine components. Each one (`Container`, `Stack`, `Title`,
+  `Text`, `Button`) reads from the MantineProvider Context to get the correct
+  styles and theme values.
+
+React converts this JSX into real **DOM nodes** — actual HTML elements:
+
+```html
+<div class="mantine-Container-root">
+  <div class="mantine-Stack-root">
+    <h2 class="mantine-Title-root">Hotel Finder..</h2>
+    <p  class="mantine-Text-root">Learning React the ui-hotelhybrid way</p>
+    <button class="mantine-Button-root">Browse Hotels</button>
+  </div>
+</div>
+```
+
+React inserts all of this into the `<div id="root">` — the one that was empty
+since Step 3.
+
+---
+
+### Step 9 — Browser paints the screen
+
+The browser sees the DOM has been populated. It:
+1. Calculates the **layout** — positions and sizes of every element
+2. Applies **CSS** from Mantine's stylesheet (loaded in Step 4)
+3. **Paints pixels** on screen
+
+**You see "Hotel Finder.." on the screen.**
+
+The whole journey from browser request to painted page takes roughly
+200–400 milliseconds on first load — most of that is the import chain in
+Step 5. On subsequent file saves, only changed modules are swapped in
+(Hot Module Replacement) and the update takes under 50 milliseconds.
+
+---
+
+### The full picture
+
+```
+npm run dev
+    │
+    ▼
+Vite starts → HTTP server on :5173, file watcher ready, WebSocket open
+    │
+    ▼  (you open the browser)
+GET /  →  index.html  →  blank page + <script src="main.tsx">
+    │
+    ▼
+GET /src/main.tsx  →  Vite converts TS→JS  →  browser starts executing
+    │
+    ▼  (import chain)
+GET app.tsx, query-client.ts, landing/index.tsx, react, mantine, router...
+Each file: Vite converts → browser receives → browser executes
+    │
+    ▼  (all imports resolved)
+createRoot(div#root).render(<App />)
+    │
+    ▼
+React calls App()
+  → QueryClientProvider sets up query cache context
+  → MantineProvider sets up theme context
+  → BrowserRouter reads URL "/" and sets up routing context
+  → Switch finds matching Route for "/"
+  → React calls LandingPage()
+    │
+    ▼
+LandingPage runs
+  → useHistory() reads routing context (no network request)
+  → returns JSX: Container > Stack > [Title, Text, Button]
+    │
+    ▼
+React converts JSX → real DOM nodes → injected into <div id="root">
+    │
+    ▼
+Browser calculates layout → applies CSS → paints pixels
+    │
+    ▼
+"Hotel Finder.." appears on screen ✓
+```
+
+---
+
+## 17. What We Will Build Next
 
 The app is currently just a landing page with a running Express backend.
 Here is the planned build order:

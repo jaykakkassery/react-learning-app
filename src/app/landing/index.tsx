@@ -9,7 +9,7 @@ export function LandingPage() {
   return (
     <Container size="md" py="xl">
       <Stack align="center" gap="md">
-        <Title>Hotel Finder</Title>
+        <Title>Hotel Finder..</Title>
         <Text c="dimmed">Learning React the ui-hotelhybrid way</Text>
 
         <Button
