@@ -55,7 +55,13 @@ you through everything you need to understand how modern React development works
     - [Step 7 — React renders App](#step-7--react-renders-app)
     - [Step 8 — React renders LandingPage](#step-8--react-renders-landingpage)
     - [Step 9 — Browser paints the screen](#step-9--browser-paints-the-screen)
-17. [What We Will Build Next](#17-what-we-will-build-next)
+17. [Understanding Mantine](#17-understanding-mantine)
+    - [How Mantine is set up](#171-how-mantine-is-set-up-in-this-project)
+    - [The prop system — spacing, colours, typography](#172-the-prop-system--how-mantine-components-are-styled)
+    - [Every component used in this project](#173-every-mantine-component-used-in-this-project)
+    - [Mantine vs plain HTML — side by side](#174-mantine-vs-plain-html--side-by-side)
+    - [How to read Mantine props at a glance](#175-summary--how-to-read-mantine-props-at-a-glance)
+18. [What We Will Build Next](#18-what-we-will-build-next)
 
 ---
 
@@ -2381,7 +2387,547 @@ Browser calculates layout → applies CSS → paints pixels
 
 ---
 
-## 17. What We Will Build Next
+## 17. Understanding Mantine
+
+Mantine is a **React component library** — a collection of pre-built,
+pre-styled, accessible UI components that you can drop into your app instead
+of building every button, card, and layout from scratch.
+
+Think of it this way. In plain HTML you would write:
+
+```html
+<button style="padding: 10px 20px; background: blue; color: white; border-radius: 4px;">
+  Click me
+</button>
+```
+
+With Mantine you write:
+
+```tsx
+<Button color="blue">Click me</Button>
+```
+
+The styling, spacing, hover effects, focus ring (for keyboard accessibility),
+and disabled state are all handled for you. You just pick the component and
+set its intent through props.
+
+---
+
+### 17.1 How Mantine is Set Up in This Project
+
+Mantine requires three things to work. All three are already in place.
+
+#### Part 1 — Import the stylesheet (`src/main.tsx`)
+
+```tsx
+import '@mantine/core/styles.css';
+```
+
+This one line loads all of Mantine's base CSS into the page globally. It must
+be imported **once**, at the very top of the app, before any component is
+rendered. It provides:
+- Default fonts
+- CSS reset (normalises browser differences)
+- CSS custom properties (variables) for colours, spacing, and shadows that
+  all Mantine components read from
+
+Without this import, Mantine components would render with no styles — just
+unstyled HTML elements.
+
+#### Part 2 — PostCSS configuration (`postcss.config.cjs`)
+
+```js
+module.exports = {
+  plugins: {
+    'postcss-preset-mantine': {},
+    'postcss-simple-vars': {
+      variables: {
+        'mantine-breakpoint-xs': '36em',
+        'mantine-breakpoint-sm': '48em',
+        'mantine-breakpoint-md': '62em',
+        'mantine-breakpoint-lg': '75em',
+        'mantine-breakpoint-xl': '88em',
+      },
+    },
+  },
+};
+```
+
+PostCSS runs on every CSS file Vite processes. This config does two things:
+
+- `postcss-preset-mantine` — injects Mantine's CSS variable definitions into
+  your stylesheets so that Mantine's own components can reference them.
+- `postcss-simple-vars` — makes the named breakpoints (`mantine-breakpoint-md`
+  etc.) available as variables inside your own `.module.css` files. You can
+  write `@media (max-width: $mantine-breakpoint-md)` in your CSS and it gets
+  replaced with `@media (max-width: 62em)` at build time.
+
+You do not touch this file — it runs silently in the background.
+
+#### Part 3 — The MantineProvider (`src/app/app.tsx`)
+
+```tsx
+import { MantineProvider } from '@mantine/core';
+
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MantineProvider>          {/* ← here */}
+        <BrowserRouter>
+          ...
+        </BrowserRouter>
+      </MantineProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+`MantineProvider` is a React Context Provider (see section 8). It broadcasts
+the **theme** — colours, font sizes, spacing scale, border radii, shadows —
+to every Mantine component inside it.
+
+Every `<Button>`, `<Card>`, `<Text>` etc. reads from this context to get the
+right values. Without `MantineProvider`, Mantine components cannot find their
+theme and will either look wrong or throw an error.
+
+You can pass a custom theme to override defaults:
+
+```tsx
+// Example — you do not need to do this now, just showing the possibility
+<MantineProvider theme={{ primaryColor: 'teal', fontFamily: 'Georgia' }}>
+```
+
+---
+
+### 17.2 The Prop System — How Mantine Components Are Styled
+
+Instead of writing CSS for every component, Mantine lets you pass style
+intentions directly as **props**. The component translates them into the right
+CSS internally.
+
+#### Spacing tokens
+
+Mantine defines a fixed scale for spacing. Every size prop accepts these tokens:
+
+| Token | Approximate value |
+|-------|------------------|
+| `xs`  | 10px |
+| `sm`  | 12px |
+| `md`  | 16px |
+| `lg`  | 20px |
+| `xl`  | 32px |
+
+These are the same tokens used for padding, margin, gap, and border-radius
+throughout Mantine. Using a shared scale keeps spacing consistent across the
+whole app without you having to remember or coordinate pixel values.
+
+#### Spacing shorthand props
+
+Mantine uses short names for common spacing properties — the same abbreviations
+CSS uses but as React props:
+
+| Prop | Meaning | CSS equivalent |
+|------|---------|----------------|
+| `p`  | padding on all sides | `padding` |
+| `px` | padding left + right | `padding-left` + `padding-right` |
+| `py` | padding top + bottom | `padding-top` + `padding-bottom` |
+| `m`  | margin on all sides | `margin` |
+| `mt` | margin top | `margin-top` |
+| `mb` | margin bottom | `margin-bottom` |
+| `ml` | margin left | `margin-left` |
+| `mr` | margin right | `margin-right` |
+
+In this project:
+
+```tsx
+<Container size="md" py="xl">   {/* padding top+bottom = xl (32px) */}
+<Title mb="md">                  {/* margin bottom = md (16px) */}
+<Text mt="md" mb="xs">          {/* margin top = md, margin bottom = xs */}
+<Button mt="md">                 {/* margin top = md */}
+```
+
+#### The colour system
+
+Mantine has a built-in palette of named colours, each with 10 shades numbered
+0 (lightest) through 9 (darkest):
+
+```
+blue.0  blue.1  blue.2  ...  blue.6  ...  blue.9
+```
+
+You reference them in two ways:
+
+```tsx
+color="blue"       // uses shade 6 by default (the "main" shade)
+c="yellow.7"       // uses shade 7 of yellow explicitly
+c="dimmed"         // special keyword — a muted grey, good for secondary text
+```
+
+In this project:
+
+```tsx
+<Badge color="blue">             {/* blue badge background */}
+<Text c="dimmed">                {/* grey secondary text */}
+<Text c="yellow.7" fw={600}>★   {/* yellow star rating */}
+<Alert color="red" ...>          {/* red error alert */}
+```
+
+#### Typography shorthand props
+
+| Prop | Meaning | Example |
+|------|---------|---------|
+| `c`  | text colour (short for `color`) | `c="dimmed"`, `c="blue"` |
+| `fw` | font weight (short for `fontWeight`) | `fw={700}` = bold, `fw={600}` = semi-bold |
+| `size` | font size using the token scale | `size="sm"`, `size="lg"` |
+
+---
+
+### 17.3 Every Mantine Component Used in This Project
+
+#### `Container`
+
+```tsx
+<Container size="md" py="xl">
+  ...children...
+</Container>
+```
+
+**What it does:** centres its content horizontally on the page and limits the
+maximum width so text does not stretch across a huge widescreen.
+
+**What it renders:** a `<div>` with `max-width` and `margin: auto`.
+
+| Prop | Effect |
+|------|--------|
+| `size="md"` | max-width ≈ 960px |
+| `size="sm"` | max-width ≈ 740px |
+| `size="lg"` | max-width ≈ 1140px |
+| `py="xl"` | padding top and bottom = xl spacing token |
+
+**Without Container:**
+```
+Text stretches full browser width — hard to read on wide screens
+```
+**With `size="md"`:**
+```
+         ┌──── max 960px ────┐
+         │  Text stays here  │
+         └───────────────────┘
+```
+
+---
+
+#### `Stack`
+
+```tsx
+<Stack align="center" gap="md">
+  <Title>Hotel Finder..</Title>
+  <Text>...</Text>
+  <Button>...</Button>
+</Stack>
+```
+
+**What it does:** arranges its children in a **vertical column** with
+consistent spacing between them.
+
+**What it renders:** a `<div>` with `display: flex; flex-direction: column`.
+
+| Prop | Effect |
+|------|--------|
+| `gap="md"` | spacing between each child = md token (16px) |
+| `align="center"` | centres children horizontally (`align-items: center`) |
+
+**Without Stack** you would write:
+```tsx
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+```
+
+With Stack, that is replaced by two readable props.
+
+---
+
+#### `Group`
+
+```tsx
+<Group justify="space-between" mb="xs">
+  <Text fw={700}>{hotel.name}</Text>
+  <Badge color="blue">{hotel.city}</Badge>
+</Group>
+
+<Group gap="xl" mt="md">
+  <Text>${hotel.price} / night</Text>
+  <Text>★ {hotel.rating}</Text>
+</Group>
+```
+
+**What it does:** arranges its children in a **horizontal row** with spacing
+between them. The counterpart to `Stack`.
+
+**What it renders:** a `<div>` with `display: flex; flex-direction: row`.
+
+| Prop | Effect |
+|------|--------|
+| `justify="space-between"` | pushes children to opposite ends (`justify-content: space-between`) |
+| `gap="xl"` | spacing between children = xl token |
+| `mb="xs"` | margin bottom = xs token |
+
+In `results/index.tsx` these two Groups produce:
+
+```
+┌─────────────────────────────────────────┐
+│ Grand Plaza Hotel          [New York]   │  ← Group justify="space-between"
+│ Luxury hotel in midtown...              │
+│                                         │
+│ $299 / night           ★ 4.8            │  ← Group gap="xl"
+└─────────────────────────────────────────┘
+```
+
+---
+
+#### `Title`
+
+```tsx
+<Title>Hotel Finder..</Title>
+<Title mb="md">Available Hotels</Title>
+```
+
+**What it does:** renders a semantic heading element (`<h1>`, `<h2>`, etc.)
+with Mantine's heading styles (font size, weight, line height).
+
+**What it renders:** an `<h2>` by default.
+
+```tsx
+<Title order={1}>Big heading</Title>   // renders <h1>
+<Title order={3}>Smaller</Title>       // renders <h3>
+```
+
+---
+
+#### `Text`
+
+```tsx
+<Text c="dimmed">Learning React the ui-hotelhybrid way</Text>
+<Text fw={700} size="lg">{hotel.name}</Text>
+<Text size="sm" c="dimmed" mb="xs">{hotel.description}</Text>
+<Text c="yellow.7" fw={600}>★ {hotel.rating}</Text>
+```
+
+**What it does:** renders a paragraph of text. The universal text component
+in Mantine — use it instead of a plain `<p>` or `<span>` when you want
+Mantine's spacing and colour system to apply.
+
+**What it renders:** a `<p>` by default.
+
+| Prop | Effect |
+|------|--------|
+| `c="dimmed"` | muted grey — good for secondary/supporting text |
+| `c="yellow.7"` | yellow shade 7 — used for the star rating |
+| `fw={700}` | bold (font-weight: 700) |
+| `fw={600}` | semi-bold |
+| `size="lg"` | larger font size |
+| `size="sm"` | smaller font size |
+
+---
+
+#### `Button`
+
+```tsx
+<Button
+  size="lg"
+  mt="md"
+  onClick={() => history.push('/results')}
+>
+  Browse Hotels
+</Button>
+```
+
+**What it does:** renders a styled, accessible button. Handles hover, active,
+focus, and disabled states automatically.
+
+**What it renders:** a `<button>` element.
+
+| Prop | Effect |
+|------|--------|
+| `size="lg"` | larger button with bigger padding and font |
+| `mt="md"` | margin top = md token |
+| `color="blue"` | blue background (default primary colour) |
+| `variant="outline"` | transparent background, coloured border |
+| `variant="subtle"` | no background, just coloured text |
+| `disabled` | greyed out, not clickable |
+| `onClick={...}` | standard React event handler |
+
+---
+
+#### `Card`
+
+```tsx
+<Card key={hotel.id} shadow="sm" padding="lg" radius="md" withBorder>
+  ...content...
+</Card>
+```
+
+**What it does:** a container with a background, optional shadow, border, and
+rounded corners — the classic "card" UI pattern for displaying grouped content.
+
+**What it renders:** a `<div>` with box-shadow and border-radius.
+
+| Prop | Effect |
+|------|--------|
+| `shadow="sm"` | small drop shadow under the card |
+| `padding="lg"` | inner padding = lg token |
+| `radius="md"` | rounded corners = md border-radius token |
+| `withBorder` | adds a 1px border (boolean prop — no value needed) |
+
+**Note on boolean props:** `withBorder` is a shorthand for `withBorder={true}`.
+In React, writing a prop name with no value is always equivalent to passing
+`true`.
+
+---
+
+#### `Badge`
+
+```tsx
+<Badge color="blue">{hotel.city}</Badge>
+```
+
+**What it does:** a small pill-shaped label used to tag or categorise content.
+
+**What it renders:** a `<div>` with pill styling.
+
+| Prop | Effect |
+|------|--------|
+| `color="blue"` | blue background with white text |
+| `color="green"` | green (available, confirmed) |
+| `color="red"` | red (error, unavailable) |
+| `variant="outline"` | transparent background with coloured border |
+
+---
+
+#### `Loader`
+
+```tsx
+<Loader />
+```
+
+**What it does:** an animated loading spinner. Used while data is being
+fetched from the server.
+
+**What it renders:** an animated SVG. No props required — it works out of
+the box.
+
+```tsx
+<Loader size="xl" />          // larger spinner
+<Loader color="teal" />       // custom colour
+<Loader type="dots" />        // animated dots instead of a circle
+```
+
+---
+
+#### `Alert`
+
+```tsx
+<Alert color="red" title="Failed to load hotels">
+  {error instanceof Error ? error.message : 'Unknown error'}
+</Alert>
+```
+
+**What it does:** a highlighted message box used to communicate important
+information — especially errors.
+
+**What it renders:** a styled `<div>` with an icon, title, and body.
+
+| Prop | Effect |
+|------|--------|
+| `color="red"` | red background tint — signals danger or error |
+| `color="blue"` | blue — informational |
+| `color="green"` | green — success |
+| `title="..."` | bold heading inside the alert |
+
+---
+
+### 17.4 Mantine vs Plain HTML — Side by Side
+
+Here is the Results page card rendered two ways:
+
+**Without Mantine (plain HTML + inline styles):**
+```tsx
+<div style={{
+  boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+  border: '1px solid #dee2e6',
+  borderRadius: '8px',
+  padding: '20px',
+  marginBottom: '16px',
+}}>
+  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+    <p style={{ fontWeight: 700, fontSize: '18px', margin: 0 }}>{hotel.name}</p>
+    <span style={{
+      background: '#228be6',
+      color: 'white',
+      borderRadius: '20px',
+      padding: '2px 10px',
+      fontSize: '12px',
+    }}>
+      {hotel.city}
+    </span>
+  </div>
+  <p style={{ fontSize: '14px', color: '#868e96' }}>{hotel.description}</p>
+  <div style={{ display: 'flex', gap: '32px', marginTop: '16px' }}>
+    <p style={{ fontWeight: 600, margin: 0 }}>${hotel.price} / night</p>
+    <p style={{ color: '#f08c00', fontWeight: 600, margin: 0 }}>★ {hotel.rating}</p>
+  </div>
+</div>
+```
+
+**With Mantine:**
+```tsx
+<Card shadow="sm" padding="lg" radius="md" withBorder>
+  <Group justify="space-between" mb="xs">
+    <Text fw={700} size="lg">{hotel.name}</Text>
+    <Badge color="blue">{hotel.city}</Badge>
+  </Group>
+  <Text size="sm" c="dimmed" mb="xs">{hotel.description}</Text>
+  <Group gap="xl" mt="md">
+    <Text fw={600}>${hotel.price} / night</Text>
+    <Text c="yellow.7" fw={600}>★ {hotel.rating}</Text>
+  </Group>
+</Card>
+```
+
+Both produce the same visual result. The Mantine version is shorter, more
+readable, and automatically consistent with every other component in the app
+because they all read from the same theme.
+
+---
+
+### 17.5 Summary — How to Read Mantine Props at a Glance
+
+When you see a Mantine component, you can decode it like this:
+
+```tsx
+<Container size="md" py="xl">
+│           │         │
+│           │         └── py = padding top+bottom, "xl" = 32px spacing token
+│           └──────────── size = max-width of the container
+└──────────────────────── Container = layout component that centres content
+
+<Text fw={700} size="lg" c="dimmed" mb="xs">
+      │          │          │          │
+      │          │          │          └── mb = margin-bottom, "xs" token
+      │          │          └─────────── c = text colour, "dimmed" = grey
+      │          └────────────────────── size = font size using the token scale
+      └───────────────────────────────── fw = font weight, 700 = bold
+
+<Card shadow="sm" padding="lg" radius="md" withBorder>
+       │            │             │          │
+       │            │             │          └── withBorder = add a 1px border (true)
+       │            │             └──────────── radius = corner rounding, "md" token
+       │            └────────────────────────── padding = inner spacing, "lg" token
+       └─────────────────────────────────────── shadow = drop shadow intensity
+```
+
+---
+
+## 18. What We Will Build Next
 
 The app is currently just a landing page with a running Express backend.
 Here is the planned build order:
