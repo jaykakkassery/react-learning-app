@@ -2389,16 +2389,48 @@ Browser calculates layout → applies CSS → paints pixels
 
 ## 17. Understanding Mantine
 
+### Before anything else — what is CSS?
+
+CSS (Cascading Style Sheets) is the language that controls how HTML looks —
+colours, fonts, spacing, layout. Without CSS, every webpage is just black text
+on a white background.
+
+```html
+<!-- HTML alone — no style -->
+<button>Click me</button>
+
+<!-- HTML + CSS — now it looks like a real button -->
+<button style="padding: 10px 20px; background: blue; color: white; border-radius: 4px;">
+  Click me
+</button>
+```
+
+In React, CSS can be written in separate `.css` files, inside `style={{}}`
+props (inline styles), or handled by a library like Mantine. Understanding
+that Mantine is fundamentally a CSS helper is the key to understanding why
+it exists.
+
+---
+
+### What is Mantine?
+
 Mantine is a **React component library** — a collection of pre-built,
 pre-styled, accessible UI components that you can drop into your app instead
 of building every button, card, and layout from scratch.
 
-Think of it this way. In plain HTML you would write:
+"Accessible" means the components are built to work correctly for all users,
+including those using keyboards (tab navigation, enter/space to click) or
+screen readers (tools used by visually impaired users). Building this
+correctly from scratch is hard — Mantine does it for you.
+
+Think of it this way. In plain HTML + CSS you would write:
 
 ```html
-<button style="padding: 10px 20px; background: blue; color: white; border-radius: 4px;">
+<button style="padding: 10px 20px; background: blue; color: white;
+               border-radius: 4px; cursor: pointer;">
   Click me
 </button>
+<!-- Plus separate CSS for hover effects, focus rings, disabled state... -->
 ```
 
 With Mantine you write:
@@ -2407,9 +2439,22 @@ With Mantine you write:
 <Button color="blue">Click me</Button>
 ```
 
-The styling, spacing, hover effects, focus ring (for keyboard accessibility),
-and disabled state are all handled for you. You just pick the component and
-set its intent through props.
+The styling, spacing, hover effects, focus ring, and disabled state are all
+handled for you. You just describe what you want through props.
+
+---
+
+### How did Mantine get into this project?
+
+It was installed with npm, the same way every library is added:
+
+```bash
+npm install @mantine/core @mantine/hooks @mantine/form
+```
+
+This downloaded Mantine's source code into `node_modules/` and added it to
+`package.json`. You never write Mantine's own code — you just import and use
+the components it provides.
 
 ---
 
@@ -2462,6 +2507,13 @@ PostCSS runs on every CSS file Vite processes. This config does two things:
   write `@media (max-width: $mantine-breakpoint-md)` in your CSS and it gets
   replaced with `@media (max-width: 62em)` at build time.
 
+**What is a breakpoint?** A breakpoint is the screen width at which your
+layout changes — for example, switching from a single column on mobile to
+two columns on desktop. The `62em` value means "62 times the base font size"
+(`em` is a CSS unit relative to font size — typically 16px, so `62em ≈ 992px`).
+You do not need to use breakpoints right now, but that is what those numbers
+are for.
+
 You do not touch this file — it runs silently in the background.
 
 #### Part 3 — The MantineProvider (`src/app/app.tsx`)
@@ -2504,6 +2556,27 @@ You can pass a custom theme to override defaults:
 Instead of writing CSS for every component, Mantine lets you pass style
 intentions directly as **props**. The component translates them into the right
 CSS internally.
+
+#### The `children` prop — content between the tags
+
+In React, anything you place between the opening and closing tags of a
+component is automatically passed as a special prop called `children`.
+
+```tsx
+<Button>Browse Hotels</Button>
+//       ─────────────
+//       This text is the 'children' prop.
+//       Button renders it inside the <button> element.
+
+<Card>
+  <Text>Grand Plaza Hotel</Text>   ← these are Card's children
+  <Text>New York</Text>
+</Card>
+```
+
+You do not pass `children` by name — you just put content between the tags
+and the component receives it automatically. Every Mantine component that
+wraps other content works this way.
 
 #### Spacing tokens
 
@@ -2580,6 +2653,44 @@ In this project:
 | `fw` | font weight (short for `fontWeight`) | `fw={700}` = bold, `fw={600}` = semi-bold |
 | `size` | font size using the token scale | `size="sm"`, `size="lg"` |
 
+**Font weight — what the numbers mean:**
+CSS font-weight uses a numeric scale from 100 (very thin) to 900 (very thick).
+The most common values you will use:
+
+| Value | Name | Looks like |
+|-------|------|-----------|
+| `400` | Regular | Normal text |
+| `600` | Semi-bold | **Slightly thicker** |
+| `700` | Bold | **Standard bold** |
+
+Most body text is 400. Headings and labels are typically 600 or 700.
+In this project `fw={700}` is used for hotel names (bold) and `fw={600}`
+for prices and ratings (semi-bold).
+
+**`c` vs `color` — an important distinction:**
+You will notice that some Mantine components use `c` and others use `color`.
+This is one of Mantine's few confusing points:
+
+```tsx
+<Text c="dimmed">      ← Text uses c= for colour
+<Button color="blue">  ← Button uses color= for its colour scheme
+<Badge color="blue">   ← Badge uses color= for its colour scheme
+<Alert color="red">    ← Alert uses color= for its colour scheme
+```
+
+The reason: `c` is a **style prop** — it directly sets the CSS `color` of
+the text, just like writing `style={{ color: 'dimmed' }}`. It only applies
+to text colour.
+
+`color` on `Button`, `Badge`, and `Alert` is a **component prop** — it sets
+the entire colour scheme of the component (background, border, hover state,
+text colour together). It is not just a text colour — it is the component's
+"theme colour".
+
+**Rule of thumb:** Use `c` on `Text` to colour text. Use `color` on
+interactive/container components (`Button`, `Badge`, `Alert`, `Loader`) to
+set their overall colour scheme.
+
 ---
 
 ### 17.3 Every Mantine Component Used in This Project
@@ -2632,12 +2743,29 @@ consistent spacing between them.
 
 **What it renders:** a `<div>` with `display: flex; flex-direction: column`.
 
+**What is Flexbox?**
+By default, HTML elements stack on top of each other (block layout) or sit
+side by side (inline layout). CSS Flexbox is a layout mode that gives you
+precise control over how elements are arranged and spaced. `Stack` and
+`Group` are both built on Flexbox — Stack uses `flex-direction: column`
+(vertical), Group uses `flex-direction: row` (horizontal).
+
+```
+Without any layout:          With Stack (column):     With Group (row):
+┌────────────────┐           ┌──────────────┐          ┌───┬───┬───┐
+│ Title          │           │    Title     │          │ A │ B │ C │
+│ Text           │           │     Text     │          └───┴───┴───┘
+│ Button         │           │    Button    │
+└────────────────┘           └──────────────┘
+(flow layout — no gaps)      (centred, even gaps)
+```
+
 | Prop | Effect |
 |------|--------|
 | `gap="md"` | spacing between each child = md token (16px) |
-| `align="center"` | centres children horizontally (`align-items: center`) |
+| `align="center"` | centres children horizontally (`align-items: center` in CSS) |
 
-**Without Stack** you would write:
+**Without Stack** you would write raw CSS:
 ```tsx
 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
 ```
@@ -2667,9 +2795,22 @@ between them. The counterpart to `Stack`.
 
 | Prop | Effect |
 |------|--------|
-| `justify="space-between"` | pushes children to opposite ends (`justify-content: space-between`) |
+| `justify="space-between"` | pushes children to opposite ends of the row |
 | `gap="xl"` | spacing between children = xl token |
 | `mb="xs"` | margin bottom = xs token |
+
+**What does `justify="space-between"` look like?**
+
+```
+justify="space-between":        justify="center":       justify="flex-start":
+┌─────────────────────────┐    ┌─────────────────────┐  ┌─────────────────────┐
+│ Name          [New York]│    │   Name  [New York]  │  │ Name  [New York]    │
+└─────────────────────────┘    └─────────────────────┘  └─────────────────────┘
+  ↑ pushed apart                 ↑ grouped in centre       ↑ pushed to the left
+```
+
+In the hotel card, `justify="space-between"` puts the hotel name on the left
+and the city badge on the right, which is the standard card header layout.
 
 In `results/index.tsx` these two Groups produce:
 
