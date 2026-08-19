@@ -4,6 +4,7 @@ import { MantineProvider } from '@mantine/core';
 import { queryClient } from './query-client';
 import { LandingPage } from './landing';
 import { ResultsPage } from './results';
+import { PlaygroundPage } from './playground';
 
 export function App() {
   return (
@@ -16,6 +17,9 @@ export function App() {
             </Route>
             <Route path="/results">
               <ResultsPage />
+            </Route>
+            <Route path="/playground">
+              <PlaygroundPage />
             </Route>
           </Switch>
         </BrowserRouter>
